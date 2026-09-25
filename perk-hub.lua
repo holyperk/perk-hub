@@ -1,6 +1,6 @@
 --[[
     PERK HUB LOADER
-    KeyAuth -> GitHub Raw -> PERK HUB MAIN
+    KeyAuth -> Cloudflare Worker -> PERK HUB MAIN
 
     App:
       Name: perk hub
@@ -18,7 +18,7 @@ local APP_NAME = "perk hub"
 local OWNER_ID = "N2xiEClavP"
 local VERSION = "1.0"
 local KEYAUTH_API = "https://keyauth.win/api/1.3/"
-local SCRIPT_URL = "https://raw.githubusercontent.com/holyperk/perk-hub/main/main.lua"
+local SCRIPT_URL = "https://perk-hub-api.mefistovmisha.workers.dev/script"
 local KEY_FOLDER = "PerkHub"
 local KEY_FILE = KEY_FOLDER .. "/license.key"
 
@@ -391,6 +391,9 @@ local function CreateLogin()
                 Url = SCRIPT_URL,
                 Method = "GET",
                 Headers = {
+                    ["Authorization"] = "Bearer " .. tostring(sessionId),
+                    ["X-Perk-Key"] = key,
+                    ["X-Perk-HWID"] = GetHWID(),
                     ["Accept"] = "text/plain"
                 }
             })
