@@ -392,6 +392,8 @@ local function CreateLogin()
                 Method = "GET",
                 Headers = {
                     ["Authorization"] = "Bearer " .. tostring(sessionId),
+                    ["X-Perk-Key"] = key,
+                    ["X-Perk-HWID"] = GetHWID(),
                     ["Accept"] = "text/plain"
                 }
             })
