@@ -1,13 +1,3 @@
---[[
-    PERK HUB LOADER
-    KeyAuth -> Cloudflare Worker -> PERK HUB MAIN
-
-    App:
-      Name: perk hub
-      Owner ID: N2xiEClavP
-      Version: 1.0
-]]
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
@@ -19,6 +9,7 @@ local OWNER_ID = "N2xiEClavP"
 local VERSION = "1.0"
 local KEYAUTH_API = "https://keyauth.win/api/1.3/"
 local SCRIPT_URL = "https://perk-hub-api.mefistovmisha.workers.dev/script"
+local ACCESS_TOKEN = "0wJrNvcGZsqvYJeEPryNiKW1hvStiLiclgbmSDSVNGQ"
 local KEY_FOLDER = "PerkHub"
 local KEY_FILE = KEY_FOLDER .. "/license.key"
 
@@ -391,9 +382,7 @@ local function CreateLogin()
                 Url = SCRIPT_URL,
                 Method = "GET",
                 Headers = {
-                    ["Authorization"] = "Bearer " .. tostring(sessionId),
-                    ["X-Perk-Key"] = key,
-                    ["X-Perk-HWID"] = GetHWID(),
+                    ["X-Perk-Access"] = ACCESS_TOKEN,
                     ["Accept"] = "text/plain"
                 }
             })
