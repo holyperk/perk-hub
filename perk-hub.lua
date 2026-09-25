@@ -4,7 +4,8 @@ local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 
 local VERSION = "1.0"
-local AUTH_URL = "https://perk-hub-api.mefistovmisha.workers.dev/auth"
+local SCRIPT_URL = "https://perk-hub-api.mefistovmisha.workers.dev/script"
+local LOADER_TOKEN = 'sW82a5Wx6roMJEAxbPaxZXKFRDU9ekL9lZ3YgcuF60A'
 local KEY_FOLDER = "PerkHub"
 local KEY_FILE = KEY_FOLDER .. "/license.key"
 
@@ -74,39 +75,82 @@ local function SaveKey(value)
 end
 
 local function RequestAuth(key)
-    local body = HttpService:JSONEncode({ key = key, hwid = GetHWID() })
-    local ok, response = pcall(function()
+    local query = table.concat({
+        "type=init",
+        "ver=1.0",
+        "name=" .. HttpService:UrlEncode("perk hub"),
+        "ownerid=" .. HttpService:UrlEncode("N2xiEClavP"),
+        "hash=undefined",
+        "token=undefined",
+        "thash=undefined"
+    }, "&")
+
+    local okInit, initResp = pcall(function()
         return Request({
-            Url = AUTH_URL,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json",
-                ["Accept"] = "text/plain"
-            },
-            Body = body
+            Url = "https://keyauth.win/api/1.3/?" .. query,
+            Method = "GET",
+            Headers = { ["Accept"] = "application/json" }
         })
     end)
-
-    if not ok or type(response) ~= "table" then
-        return false, "failed to contact server"
+    if not okInit or type(initResp) ~= "table" then
+        return false, "KeyAuth connection failed"
+    end
+    local initBody = initResp.Body or initResp.body or ""
+    local okJson, init = pcall(function() return HttpService:JSONDecode(initBody) end)
+    if not okJson or type(init) ~= "table" or init.success ~= true then
+        return false, (type(init) == "table" and init.message) or "KeyAuth initialization failed"
     end
 
-    local responseBody = response.Body or response.body or ""
-    local statusCode = tonumber(response.StatusCode or response.statusCode or response.Status or response.status or response.status_code)
+    local params = table.concat({
+        "type=license",
+        "key=" .. HttpService:UrlEncode(key),
+        "sessionid=" .. HttpService:UrlEncode(init.sessionid or ""),
+        "name=" .. HttpService:UrlEncode("perk hub"),
+        "ownerid=" .. HttpService:UrlEncode("N2xiEClavP"),
+        "hwid=" .. HttpService:UrlEncode(GetHWID())
+    }, "&")
 
-    if statusCode and statusCode ~= 200 then
-        return false, responseBody ~= "" and responseBody or ("HTTP " .. tostring(statusCode))
+    local okLogin, loginResp = pcall(function()
+        return Request({
+            Url = "https://keyauth.win/api/1.3/?" .. params,
+            Method = "GET",
+            Headers = { ["Accept"] = "application/json" }
+        })
+    end)
+    if not okLogin or type(loginResp) ~= "table" then
+        return false, "KeyAuth connection failed"
     end
 
-    if type(responseBody) ~= "string" or responseBody == "" then
-        return false, "server returned an empty response"
+    local loginBody = loginResp.Body or loginResp.body or ""
+    local okLoginJson, loginData = pcall(function() return HttpService:JSONDecode(loginBody) end)
+    if not okLoginJson or type(loginData) ~= "table" or loginData.success ~= true then
+        return false, (type(loginData) == "table" and loginData.message) or "KeyAuth license rejected"
     end
 
-    if not responseBody:find("PERK HUB", 1, true) then
-        return false, responseBody
+    local okScript, scriptResp = pcall(function()
+        return Request({
+            Url = SCRIPT_URL .. "?loader=" .. HttpService:UrlEncode(LOADER_TOKEN),
+            Method = "GET",
+            Headers = {
+                ["X-Perk-Loader"] = LOADER_TOKEN,
+                ["Accept"] = "text/plain"
+            }
+        })
+    end)
+    if not okScript or type(scriptResp) ~= "table" then
+        return false, "failed to download PERK HUB"
     end
 
-    return true, responseBody
+    local body = scriptResp.Body or scriptResp.body or ""
+    local status = tonumber(scriptResp.StatusCode or scriptResp.Status or scriptResp.statusCode or scriptResp.status or 0)
+    if status ~= 0 and status ~= 200 then
+        return false, "server denied the script (HTTP " .. tostring(status) .. ")"
+    end
+    if body == "" then
+        return false, "server returned an empty script"
+    end
+
+    return true, body
 end
 
 local function CreateLogin()
