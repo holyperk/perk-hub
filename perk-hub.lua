@@ -391,8 +391,7 @@ local function CreateLogin()
                 Url = SCRIPT_URL,
                 Method = "GET",
                 Headers = {
-                    ["X-License-Key"] = key,
-                    ["X-HWID"] = GetHWID(),
+                    ["Authorization"] = "Bearer " .. tostring(sessionId),
                     ["Accept"] = "text/plain"
                 }
             })
