@@ -1,3 +1,13 @@
+--[[
+    PERK HUB LOADER
+    KeyAuth -> Cloudflare Worker -> PERK HUB MAIN
+
+    App:
+      Name: perk hub
+      Owner ID: N2xiEClavP
+      Version: 1.0
+]]
+
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
@@ -9,10 +19,11 @@ local OWNER_ID = "N2xiEClavP"
 local VERSION = "1.0"
 local KEYAUTH_API = "https://keyauth.win/api/1.3/"
 local SCRIPT_URL = "https://perk-hub-api.mefistovmisha.workers.dev/script"
+local KEY_FOLDER = "PerkHub"
+local KEY_FILE = KEY_FOLDER .. "/license.key"
 
 local Request = (syn and syn.request) or (http and http.request) or http_request or request
 if not Request then
-    warn("[PERK HUB] No HTTP request function available.")
     return
 end
 
@@ -111,6 +122,47 @@ local function KeyAuthRequest(params)
     return true, decoded
 end
 
+local function EnsureKeyFolder()
+    if not makefolder then
+        return
+    end
+
+    pcall(function()
+        if not isfolder(KEY_FOLDER) then
+            makefolder(KEY_FOLDER)
+        end
+    end)
+end
+
+local function LoadSavedKey()
+    if not isfile or not readfile then
+        return ""
+    end
+
+    if not isfile(KEY_FILE) then
+        return ""
+    end
+
+    local ok, value = pcall(readfile, KEY_FILE)
+    if not ok or type(value) ~= "string" then
+        return ""
+    end
+
+    return value:gsub("^%s+", ""):gsub("%s+$", "")
+end
+
+local function SaveKey(value)
+    if not writefile then
+        return
+    end
+
+    EnsureKeyFolder()
+
+    pcall(function()
+        writefile(KEY_FILE, value)
+    end)
+end
+
 local function CreateLogin()
     local gui = New("ScreenGui", {
         Name = "PerkHubLoader",
@@ -130,19 +182,11 @@ local function CreateLogin()
         BackgroundColor3 = C.Background,
         BorderSizePixel = 0,
         AnchorPoint = Vector2.new(0.5, 0.5),
-        Position = UDim2.new(0.5, 0, 0.5, 0),
+        Position = UDim2.new(0.5, 0, 0.5, 25),
         Size = UDim2.fromOffset(410, 270)
     }, gui)
     Corner(window, 10)
     Stroke(window, C.Border, 1, 0.05)
-
-    -- Same pop-in animation style as the main PERK HUB.
-    local WindowScale = New("UIScale", {
-        Scale = 0.82
-    }, window)
-
-    local NormalScale = 1
-    local HiddenScale = 0.82
 
     local grad = New("UIGradient", {
         Color = ColorSequence.new(
@@ -214,7 +258,7 @@ local function CreateLogin()
         ClearTextOnFocus = false,
         PlaceholderText = "XXXX-XXXX-XXXX-XXXX",
         PlaceholderColor3 = C.Muted,
-        Text = "",
+        Text = LoadSavedKey(),
         TextColor3 = C.Text,
         TextSize = 11,
         Font = Enum.Font.Gotham,
@@ -239,10 +283,12 @@ local function CreateLogin()
     Corner(login, 7)
     Stroke(login, C.PinkDark, 1, 0.15)
 
+    local savedKey = LoadSavedKey()
+
     local status = New("TextLabel", {
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        Text = "Status: waiting for key",
+        Text = savedKey ~= "" and "Status: saved key loaded — press LOGIN" or "Status: waiting for key",
         TextColor3 = C.Muted,
         TextSize = 9,
         Font = Enum.Font.Gotham,
@@ -274,40 +320,9 @@ local function CreateLogin()
 
     local function Finish(ok)
         accepted = ok
-
-        if not gui or not gui.Parent then
-            return
+        if gui and gui.Parent then
+            gui:Destroy()
         end
-
-        -- Pop-out animation matching the main hub's hide animation.
-        local tween = TweenService:Create(
-            WindowScale,
-            TweenInfo.new(
-                0.25,
-                Enum.EasingStyle.Quad,
-                Enum.EasingDirection.In
-            ),
-            {
-                Scale = HiddenScale
-            }
-        )
-
-        local backdropTween = TweenService:Create(
-            backdrop,
-            TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-            {
-                BackgroundTransparency = 1
-            }
-        )
-
-        tween.Completed:Connect(function()
-            if gui and gui.Parent then
-                gui:Destroy()
-            end
-        end)
-
-        tween:Play()
-        backdropTween:Play()
     end
 
     local function TryLogin()
@@ -367,6 +382,7 @@ local function CreateLogin()
             return
         end
 
+        SaveKey(key)
         SetStatus("license accepted", C.Green)
         login.Text = "LOADING..."
 
@@ -375,7 +391,8 @@ local function CreateLogin()
                 Url = SCRIPT_URL,
                 Method = "GET",
                 Headers = {
-                    ["Authorization"] = "Bearer " .. tostring(sessionId),
+                    ["X-License-Key"] = key,
+                    ["X-HWID"] = GetHWID(),
                     ["Accept"] = "text/plain"
                 }
             })
@@ -386,19 +403,38 @@ local function CreateLogin()
             login.Text = "LOGIN"
             login.BackgroundColor3 = C.PinkDark
             login.TextColor3 = C.PinkBright
-            SetStatus("failed to download PERK HUB", C.Red)
+            SetStatus("failed to contact server", C.Red)
             return
         end
 
-        local body = response.Body or response.body
-        local statusCode = tonumber(response.StatusCode or response.Status or 0)
+        local body = response.Body or response.body or ""
+        local statusCode = tonumber(
+            response.StatusCode
+            or response.statusCode
+            or response.Status
+            or response.status
+            or response.status_code
+        )
 
-        if statusCode ~= 200 or type(body) ~= "string" or body == "" then
+        if statusCode and statusCode ~= 200 then
+            local message = tostring(body ~= "" and body or ("HTTP " .. tostring(statusCode)))
+            if #message > 90 then
+                message = message:sub(1, 90) .. "..."
+            end
             busy = false
             login.Text = "LOGIN"
             login.BackgroundColor3 = C.PinkDark
             login.TextColor3 = C.PinkBright
-            SetStatus("server denied the script", C.Red)
+            SetStatus(message, C.Red)
+            return
+        end
+
+        if type(body) ~= "string" or body == "" then
+            busy = false
+            login.Text = "LOGIN"
+            login.BackgroundColor3 = C.PinkDark
+            login.TextColor3 = C.PinkBright
+            SetStatus("server returned no script", C.Red)
             return
         end
 
@@ -408,13 +444,11 @@ local function CreateLogin()
 
         local loader, compileError = loadstring(body)
         if not loader then
-            warn("[PERK HUB] Main script compile error:", compileError)
             return
         end
 
         local runOk, runError = pcall(loader)
         if not runOk then
-            warn("[PERK HUB] Main script runtime error:", runError)
         end
     end
 
@@ -463,18 +497,9 @@ local function CreateLogin()
         end
     end)
 
-    WindowScale.Scale = HiddenScale
-    TweenService:Create(
-        WindowScale,
-        TweenInfo.new(
-            0.34,
-            Enum.EasingStyle.Back,
-            Enum.EasingDirection.Out
-        ),
-        {
-            Scale = NormalScale
-        }
-    ):Play()
+    TweenService:Create(window, TweenInfo.new(0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, 0, 0.5, 0)
+    }):Play()
 
     return function()
         while not accepted and not closed do
