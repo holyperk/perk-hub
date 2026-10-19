@@ -1,13 +1,3 @@
---[[
-    PERK HUB LOADER
-    KeyAuth -> Cloudflare Worker -> PERK HUB MAIN
-
-    App:
-      Name: perk hub
-      Owner ID: N2xiEClavP
-      Version: 1.0
-]]
-
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local HttpService = game:GetService("HttpService")
